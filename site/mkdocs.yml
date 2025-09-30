@@ -90,8 +90,6 @@ markdown_extensions:
 plugins:
   - search:
       separator: '[\s\-\.]+'
-  - minify:
-      minify_html: true
 
 extra:
   generator: false
