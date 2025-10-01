@@ -240,6 +240,600 @@ if partition_detected():
         mark_epoch()            # Explicit staleness boundary
 ```
 
+#### Mode Matrix for CAP Systems
+
+The CAP trade-off manifests as operational modes with explicit guarantees. Systems don't "choose C or A"—they transition between modes based on evidence availability, preserving different invariants in each mode.
+
+##### Floor Mode: Absolute Minimum (Survival)
+
+**Purpose**: Preserve fundamental correctness when all evidence is lost. Never lie, but may refuse service.
+
+**Invariants preserved**:
+- **SAFETY**: Never return incorrect data (no false positives)
+- **MONOTONICITY**: Version numbers/clocks never go backward
+- **CAUSALITY**: Happens-before relationships preserved (via logical clocks)
+- **DURABILITY**: Accepted writes never lost (may delay acknowledgment)
+
+**Invariants relaxed**:
+- **LIVENESS**: May not make progress (requests may block)
+- **FRESHNESS**: Cannot guarantee recency
+- **AVAILABILITY**: May refuse reads/writes
+
+**Evidence available**:
+- **Local durability**: Data written to local disk
+- **Logical timestamps**: Lamport clock or vector clock (no physical time)
+- **No quorum evidence**: Cannot prove majority agreement
+- **No freshness evidence**: Cannot bound staleness
+
+**Allowed operations**:
+- **Writes to local log**: Accepted but not acknowledged (pending quorum)
+- **Causal reads**: Read local state with explicit staleness warning
+- **No linearizable operations**: Cannot guarantee ordering across nodes
+
+**Guarantee vector**: `⟨Range, Causal, RA, EO, Idem(K), Auth⟩`
+
+**User contract**:
+- "System is degraded. Reads may be stale. Writes are logged but not confirmed. Service may be unavailable."
+- Clients receive `HTTP 503 Service Unavailable` or `Error: No quorum available`
+
+**Entry trigger**:
+- Partition detected AND minority partition (CP systems)
+- All remote nodes unreachable (CP systems)
+- Quorum loss sustained for > 30 seconds
+
+**Exit trigger**:
+- Quorum evidence restored → Recovery mode
+- Partition healed AND can reach majority → Recovery mode
+
+**Example**: MongoDB replica set in minority partition. Primary steps down, no new primary elected. Reads return "not master" error. Writes rejected.
+
+##### Target Mode: Normal Operation (Optimal)
+
+**Purpose**: Provide full guarantees with optimal performance when evidence is fresh and quorum available.
+
+**Invariants preserved**:
+- **CONSISTENCY**: Linearizability (CP) or causal consistency (AP)
+- **SAFETY**: Never return stale data (CP) or eventual consistency (AP)
+- **MONOTONICITY**: Operations ordered globally (CP) or causally (AP)
+- **DURABILITY**: Writes persisted to quorum (CP) or sloppy quorum (AP)
+- **LIVENESS**: Requests complete within bounded time
+
+**Evidence available**:
+- **CP systems**:
+  - Fresh quorum certificates (majority acknowledgment within last 5 seconds)
+  - Valid leader lease (not expired)
+  - Network partition detector shows "no partition"
+  - Heartbeats from majority nodes (< 2 second timeout)
+- **AP systems**:
+  - Vector clocks for causality
+  - Version numbers for conflict detection
+  - Replication lag metrics (may be unbounded)
+  - Hinted handoff queue size
+
+**Allowed operations**:
+- **CP systems**:
+  - Linearizable reads (leader serves with fresh lease)
+  - Linearizable writes (commit to quorum)
+  - Transactions with strict serializability
+  - Follower reads with bounded staleness (optional)
+- **AP systems**:
+  - Eventually consistent reads (any replica)
+  - Eventually consistent writes (accept on any node)
+  - Read-your-writes via session tokens
+  - Multi-version conflict resolution
+
+**Guarantee vector**:
+- **CP**: `⟨Global, SS, SER, Fresh(φ), Idem, Auth⟩`
+- **AP**: `⟨Range, Causal, RA, EO, Idem(K), Auth⟩`
+
+**Performance**:
+- **CP**: Commit latency 1-2 RTT, throughput limited by leader
+- **AP**: Commit latency local-only, throughput scales with nodes
+
+**User contract**:
+- **CP**: "All reads see latest writes. Writes committed to majority. System available."
+- **AP**: "All partitions available. Writes accepted immediately. Conflicts resolved automatically. Eventual consistency."
+
+**Entry trigger**:
+- System start with quorum available
+- Recovery mode successfully restored evidence
+- Network partition healed
+
+**Exit trigger**:
+- **CP**: Partition detected OR quorum lost → Degraded-CP mode
+- **AP**: Partition detected → Degraded-AP mode (note: may remain in Target with weaker guarantees)
+
+**Example**: Spanner in majority partition—TrueTime synchronized, Paxos quorum available, linearizable reads/writes at 5-10ms latency.
+
+##### Degraded-CP Mode: Consistency Prioritized
+
+**Purpose**: During partition, minority partitions reject writes to preserve consistency. Majority partition continues normally.
+
+**This mode bifurcates**:
+- **Majority partition**: Remains in Target mode
+- **Minority partition**: Enters Degraded-CP mode
+
+**Invariants preserved** (minority partition):
+- **SAFETY**: Never return inconsistent data
+- **MONOTONICITY**: Version numbers never go backward
+- **DURABILITY**: Previously committed writes still readable
+
+**Invariants relaxed** (minority partition):
+- **LIVENESS**: Writes blocked (unavailable)
+- **AVAILABILITY**: May refuse reads (or serve stale reads with warning)
+
+**Evidence available** (minority partition):
+- **Stale quorum certificates**: Last successful commit may be seconds/minutes ago
+- **Expired leader lease**: Cannot safely serve writes
+- **Local durability**: Can read locally committed data
+- **Partition epoch marker**: Explicit boundary "partition started at T"
+
+**Allowed operations** (minority partition):
+- **Stale reads**: Read local state with explicit staleness bound `δ` (e.g., "data may be up to 30 seconds old")
+- **No writes**: Reject with error "no quorum available"
+- **No transactions**: Cannot coordinate
+
+**Guarantee vector** (minority partition): `⟨Range, Causal, RA, BS(δ), Idem(K), Auth⟩`
+
+**User contract** (minority partition):
+- "System is partitioned. Writes unavailable. Reads may be stale by up to δ seconds. Majority partition is operational."
+- Clients receive `HTTP 503 Service Unavailable` for writes
+- Reads return `HTTP 200 OK` with header `X-Staleness-Bound: 30s` (if allowed)
+
+**Entry trigger**:
+- Partition detected AND in minority partition
+- Cannot reach quorum for > 10 seconds
+- Leader lease expires and cannot renew
+
+**Exit trigger**:
+- Partition heals → Recovery mode
+- Becomes majority (e.g., more nodes join this partition) → Target mode
+
+**Example**: MongoDB replica set split into {Primary+1 Secondary} vs {1 Secondary}. The single secondary enters Degraded-CP: rejects writes, serves stale reads (if configured), waits for partition to heal.
+
+##### Degraded-AP Mode: Availability Prioritized
+
+**Purpose**: During partition, all partitions continue serving reads and writes, accepting eventual consistency and potential conflicts.
+
+**Invariants preserved**:
+- **SAFETY**: Never lose writes (durability via local/sloppy quorum)
+- **CAUSALITY**: Happens-before preserved within partition
+- **AVAILABILITY**: Always accept reads and writes
+- **LIVENESS**: Requests complete (no blocking)
+
+**Invariants relaxed**:
+- **CONSISTENCY**: Linearizability lost (partitions diverge)
+- **AGREEMENT**: Conflicting writes possible across partitions
+
+**Evidence available**:
+- **Partition epoch markers**: Each partition stamps writes with epoch "partition_42"
+- **Vector clocks**: Track causality within and across partitions
+- **Version vectors**: Detect conflicts
+- **Hinted handoff**: Queue writes for unreachable nodes
+- **Merkle tree hashes**: For anti-entropy repair
+
+**Allowed operations**:
+- **Optimistic writes**: Accept writes in any partition, tag with epoch
+- **Optimistic reads**: Serve reads from local partition
+- **Conflict detection**: Track versions, flag conflicts for resolution
+- **Hinted handoff**: Forward writes to unreachable nodes when partition heals
+
+**Guarantee vector**: `⟨Range, Causal, RA, EO, Idem(K), Auth⟩`
+
+**User contract**:
+- "System is partitioned. All partitions available. Writes accepted in all partitions. Conflicts will be resolved (last-write-wins, vector clocks, or application-defined). Data will converge when partition heals."
+- Clients receive `HTTP 200 OK` immediately
+- Responses include `X-Partition-Epoch: 42` and `X-Vector-Clock: {A:5, B:3}`
+
+**Entry trigger**:
+- Partition detected (any partition)
+- Network split detected by gossip protocol
+- Hinted handoff queue starts growing
+
+**Exit trigger**:
+- Partition heals → Recovery mode
+- Anti-entropy repair begins
+
+**Example**: Cassandra cluster split into two datacenters. Both datacenters accept writes to the same key with different values. Vector clocks detect conflict: `{DC1: v=10, DC2: v=11}`. After partition heals, last-write-wins resolves conflict (or application provides custom resolver).
+
+##### Recovery Mode: Partition Healing
+
+**Purpose**: After partition heals, reconcile diverged state, restore evidence, and return to Target mode. This is the most delicate mode—incorrect recovery can violate invariants.
+
+**Invariants preserved**:
+- **SAFETY**: Never lose committed writes
+- **CAUSALITY**: Preserve happens-before relationships
+- **DURABILITY**: Committed data remains committed
+
+**Invariants being restored**:
+- **CONSISTENCY**: Reconcile diverged state
+- **AGREEMENT**: Resolve conflicts
+- **FRESHNESS**: Re-establish bounded staleness
+
+**Evidence required**:
+- **CP systems**:
+  - Quorum reachable again
+  - Leader election completes (new term)
+  - Majority agree on last committed index
+  - Replay log to synchronize
+- **AP systems**:
+  - Partition detection shows "healed"
+  - Vector clocks compared across partitions
+  - Conflicting versions identified
+  - Merkle tree sync initiated
+
+**Allowed operations** (restricted during recovery):
+- **CP systems**:
+  - **Leader election**: Raft/Paxos election protocol
+  - **Log replay**: Minority replays majority's log
+  - **Read-only mode**: Optionally allow reads during recovery (stale)
+  - **No writes until committed**: Block writes until log synchronized
+- **AP systems**:
+  - **Anti-entropy repair**: Read repair, hinted handoff delivery
+  - **Conflict resolution**: Apply last-write-wins, vector clock merge, or custom logic
+  - **Merkle tree sync**: Identify diverged key ranges
+  - **Optimistic reads/writes**: Continue serving (still eventually consistent)
+
+**Guarantee vector**:
+- **CP during recovery**: `⟨Range, Causal, RA, BS(δ), Idem(K), Auth⟩` (degraded until sync complete)
+- **AP during recovery**: `⟨Range, Causal, RA, EO, Idem(K), Auth⟩` (unchanged, but convergence in progress)
+
+**User contract**:
+- **CP**: "Partition healed. System recovering. Reads allowed (may be stale). Writes blocked until recovery completes. Estimated time: 5-30 seconds."
+- **AP**: "Partition healed. System reconciling. Reads and writes allowed. Conflicts being resolved. Convergence in progress."
+
+**Recovery actions**:
+- **CP systems (Raft example)**:
+  1. Detect partition healed (nodes can communicate again)
+  2. Start leader election (increment term)
+  3. Candidate sends `RequestVote` with last log index
+  4. Majority votes for candidate with longest log
+  5. New leader elected, commit index established
+  6. Followers receive `AppendEntries` with missing log entries
+  7. Followers replay log, update state machine
+  8. Leader declares "recovery complete" when all followers caught up
+  9. Enter Target mode
+- **AP systems (Cassandra example)**:
+  1. Detect partition healed (gossip protocol detects all nodes reachable)
+  2. Hinted handoff: Deliver queued writes to nodes that were unreachable
+  3. Read repair: On read, detect stale replicas, send repair writes
+  4. Anti-entropy repair: Background Merkle tree comparison, sync diverged ranges
+  5. Conflict resolution: Compare vector clocks, apply resolution policy
+  6. Gradual convergence (no explicit "recovery complete")
+  7. Remain in Target mode throughout (AP systems don't distinguish recovery)
+
+**Performance impact**:
+- **CP recovery**: Write latency may be 2-10× normal during log replay
+- **AP recovery**: No visible impact (repair is background process)
+
+**Entry trigger**:
+- Partition heals (network connectivity restored)
+- Quorum reachable again (CP systems)
+- Gossip protocol detects all nodes (AP systems)
+
+**Exit trigger**:
+- **CP**: Leader elected, log synchronized, quorum stable for > 10 seconds → Target mode
+- **AP**: No explicit exit (remain in Target mode, background repair continues)
+
+**Example**: MongoDB replica set partition heals. Node that was in minority reconnects. It discovers new primary (majority partition elected new leader), replays oplog from last committed operation, catches up, and rejoins as secondary. Primary declares replica set healthy. Total recovery time: 15 seconds.
+
+#### State Transition Diagram
+
+```
+                 Partition Detected
+                        ↓
+           ┌────────────┼────────────┐
+           ↓                         ↓
+    [Degraded-CP]             [Degraded-AP]
+    (Minority                 (All partitions
+     unavailable)              continue)
+           │                         │
+           │ Partition Heals         │ Partition Heals
+           ↓                         ↓
+    [Recovery-CP]             [Recovery-AP]
+    (Log replay,              (Anti-entropy,
+     leader election)          conflict resolution)
+           │                         │
+           │ Quorum Stable           │ Convergence Progress
+           ↓                         ↓
+       [Target]                  [Target]
+    (Normal operation)        (Normal operation)
+           │                         │
+           └────────────┬────────────┘
+                        ↓
+                 Catastrophic Failure
+                (All nodes unreachable)
+                        ↓
+                   [Floor]
+                (Survival mode)
+```
+
+**Mode transitions**:
+- **Target → Degraded-CP**: Partition detected, in minority, CP policy
+- **Target → Degraded-AP**: Partition detected, AP policy
+- **Degraded-CP → Recovery-CP**: Partition heals
+- **Degraded-AP → Recovery-AP**: Partition heals (may be no-op in AP systems)
+- **Recovery-CP → Target**: Log synchronized, quorum stable
+- **Recovery-AP → Target**: Conflicts resolved (gradual)
+- **Any → Floor**: Catastrophic failure (all quorum lost, all nodes unreachable)
+- **Floor → Recovery**: Quorum restored
+
+#### Real-World Example: MongoDB Replica Set During Network Partition
+
+**Scenario**: 5-node MongoDB replica set deployed across 3 datacenters: DC1 (nodes A, B), DC2 (nodes C, D), DC3 (node E). Network partition splits DC1+DC2 (4 nodes) from DC3 (1 node).
+
+**T+0 (Before Partition): Target Mode**
+
+```
+Topology:
+  Primary: Node A (DC1)
+  Secondaries: B, C, D, E
+  Quorum: 3 of 5 nodes
+
+Evidence:
+  - Primary lease valid: expires in 10 seconds
+  - Heartbeats: A ↔ {B,C,D,E} every 2 seconds
+  - Oplog: All nodes at oplog position 12,450,000
+  - Replication lag: <50ms on all secondaries
+
+Guarantee vector: ⟨Global, SS, SER, Fresh(2s), Idem(BSON_ID), Auth⟩
+
+Operations:
+  - Writes: Primary A accepts, replicates to majority (3 of 5), acknowledges
+  - Reads: Primary serves linearizable reads, secondaries serve stale reads
+  - Transactions: Multi-document transactions with snapshot isolation
+```
+
+**T+10s (Partition Detected): Split into Majority and Minority**
+
+```
+Network event: DC3 loses connectivity to DC1 and DC2
+
+Majority partition (DC1+DC2): Nodes {A, B, C, D} — 4 nodes
+Minority partition (DC3): Node {E} — 1 node
+
+Detection:
+  - Node E stops receiving heartbeats from A, B, C, D
+  - Nodes A, B, C, D stop receiving heartbeats from E
+  - After 10 seconds (5 missed heartbeats), partition detected
+```
+
+**T+12s (Majority Partition: Remains Target Mode)**
+
+```
+Partition: DC1+DC2 (4 nodes)
+
+Evidence:
+  - Primary A still has quorum: can reach B, C, D (4 of 5 = majority)
+  - Primary lease valid: renewed successfully
+  - Heartbeats: A ↔ {B,C,D} operational
+  - Oplog: Continues advancing (now at 12,460,000)
+
+Mode: Target (unchanged)
+
+Guarantee vector: ⟨Global, SS, SER, Fresh(2s), Idem(BSON_ID), Auth⟩
+
+Operations:
+  - Writes: Primary A accepts writes, replicates to {B,C,D}, acknowledges
+  - Reads: Linearizable reads from Primary A, stale reads from {B,C,D}
+  - Transactions: Continue normally
+
+User experience: No visible impact
+```
+
+**T+12s (Minority Partition: Enters Degraded-CP Mode)**
+
+```
+Partition: DC3 (1 node)
+
+Evidence:
+  - Node E cannot reach any other nodes
+  - Node E's primary lease expired (last heartbeat 12 seconds ago)
+  - Cannot achieve quorum (needs 3 nodes, has only 1)
+  - Local oplog: Frozen at position 12,450,000
+
+Mode: Degraded-CP (Floor mode)
+
+Guarantee vector: ⟨Range, Causal, RA, BS(∞), Idem(BSON_ID), Auth⟩
+
+Operations:
+  - Writes: REJECTED with "not master and slaveOk=false"
+  - Reads: REJECTED with "not master and slaveOk=false" (by default)
+    - If slaveOk=true: Stale reads allowed, data frozen at T+0
+  - Transactions: REJECTED
+
+User experience:
+  - Applications in DC3 receive errors:
+    ```
+    MongoNetworkError: connection to primary lost
+    MongoServerError: not master and slaveOk=false
+    ```
+  - Applications must reconnect to DC1/DC2 (if routing allows)
+```
+
+**T+90s (Partition Heals): Recovery Mode**
+
+```
+Network event: DC3 connectivity restored
+
+Recovery process (node E):
+  1. E detects network restored (can ping DC1/DC2)
+  2. E sends heartbeat to Primary A: "I'm at oplog 12,450,000"
+  3. Primary A responds: "I'm at oplog 12,890,000, you're behind"
+  4. E enters RECOVERING state (visible in rs.status())
+  5. E begins oplog replay:
+     - Fetches oplog entries 12,450,000 → 12,890,000 from A
+     - Applies 440,000 operations at ~50,000 ops/sec
+     - Takes ~9 seconds to catch up
+  6. E completes replay, oplog now at 12,890,000
+  7. E sends heartbeat: "Caught up, ready"
+  8. Primary A acknowledges: "You're a valid secondary"
+
+Mode: Recovery-CP → Target
+
+Evidence during recovery:
+  - Oplog replay in progress: 12,450,000 → 12,890,000
+  - Replication lag: 9 seconds initially, decreasing
+  - Node state: RECOVERING (not SECONDARY until caught up)
+
+Operations during recovery (node E):
+  - Writes: Still rejected (not a valid secondary yet)
+  - Reads: Rejected (cannot serve stale reads while recovering)
+  - After recovery: Allowed (now a valid secondary)
+
+Time to recovery: ~9 seconds
+```
+
+**T+100s (After Recovery): Target Mode Restored**
+
+```
+Topology:
+  Primary: Node A (DC1)
+  Secondaries: B, C, D, E (all healthy)
+  Quorum: 3 of 5 nodes
+
+Evidence:
+  - Primary lease valid: renewed
+  - Heartbeats: A ↔ {B,C,D,E} every 2 seconds
+  - Oplog: All nodes at oplog position 12,900,000
+  - Replication lag: <50ms on all secondaries
+
+Mode: Target
+
+Guarantee vector: ⟨Global, SS, SER, Fresh(2s), Idem(BSON_ID), Auth⟩
+
+Operations: Fully restored (as before partition)
+
+User experience: DC3 applications can reconnect to node E, full functionality restored
+```
+
+**Lessons for Operators**:
+
+1. **Majority partition continues seamlessly**: The 4-node partition maintained quorum and operated normally. This is CAP's CP choice—consistency preserved.
+
+2. **Minority partition unavailable**: The 1-node partition rejected all operations. This prevents split-brain (two primaries accepting conflicting writes).
+
+3. **Recovery is automatic but not instantaneous**: Node E took 9 seconds to replay 440,000 oplog entries. During this time, it was unavailable.
+
+4. **Evidence-based transitions**: Mode changes triggered by concrete events—heartbeat loss, oplog position, lease expiration—not arbitrary timeouts.
+
+5. **User-visible guarantees change**: Applications in DC3 received explicit errors ("not master"), not stale data or silent failures.
+
+#### How This Helps Operators Reason About CAP
+
+**1. Predictable Degradation**
+
+Instead of wondering "what happens during a partition?", operators know:
+- **CP systems**: Minority becomes unavailable (specific error codes)
+- **AP systems**: All partitions stay available (conflicts flagged)
+- **Recovery**: Automatic with measurable progress (oplog replay rate)
+
+**2. Evidence-Based Monitoring**
+
+Operators can monitor mode transitions:
+```
+Target mode:      quorum_available=1, primary_lease_valid=1, replication_lag<100ms
+Degraded-CP mode: quorum_available=0, primary_lease_expired=1
+Recovery mode:    oplog_replay_in_progress=1, lag_decreasing=1
+```
+
+**3. Runbooks for Each Mode**
+
+**Target mode**: Normal operation
+- Alert if replication lag > 1s
+- Alert if quorum borderline (exactly 3 of 5 nodes)
+
+**Degraded-CP mode**: Minority partition unavailable
+- Alert: "Partition detected, minority unavailable"
+- Action: Investigate network connectivity
+- Do NOT: Restart nodes (won't help, partition is network issue)
+- Do NOT: Promote minority to primary (creates split-brain)
+
+**Recovery mode**: Healing in progress
+- Alert: "Partition healed, recovery in progress"
+- Action: Monitor oplog replay rate (should be >10,000 ops/sec)
+- If recovery stalls: Check disk I/O, consider initial sync
+
+**Floor mode**: Catastrophic failure
+- Alert: "All quorum lost, system in survival mode"
+- Action: Restore majority of nodes ASAP
+- Do NOT: Accept writes (would violate consistency)
+
+**4. Capacity Planning for CAP Trade-offs**
+
+**CP systems**: Must tolerate minority unavailability
+- Deploy 5 nodes across 3 datacenters (can lose 1 DC, still have majority)
+- Never deploy 2 nodes (no majority possible if 1 fails)
+- Prefer odd node counts (3, 5, 7) for clear majorities
+
+**AP systems**: Must tolerate eventual consistency
+- Deploy replicas in each region for low latency
+- Configure conflict resolution (last-write-wins, vector clocks)
+- Monitor conflict rate (should be <0.1% in healthy systems)
+
+**5. Clear User Contracts**
+
+Applications can reason about guarantees:
+```python
+try:
+    result = db.write(key, value)
+    # In Target mode: linearizable write, committed to majority
+    # In Degraded-AP mode: accepted locally, will reconcile later
+except NoQuorumError:
+    # In Degraded-CP mode: minority partition, retry on majority
+    retry_on_primary()
+except NetworkPartitionError:
+    # Floor mode: catastrophic failure, escalate
+    alert_oncall()
+```
+
+**6. Testing Mode Transitions**
+
+Operators can test partition behavior:
+```bash
+# Simulate partition using iptables
+iptables -A INPUT -s <majority_nodes> -j DROP
+iptables -A OUTPUT -d <majority_nodes> -j DROP
+
+# Verify minority enters Degraded-CP mode
+mongo --eval "rs.status()" | grep "state: RECOVERING or DOWN"
+
+# Verify writes rejected
+mongo --eval "db.test.insert({x: 1})"  # Should fail with "not master"
+
+# Heal partition
+iptables -D INPUT -s <majority_nodes> -j DROP
+iptables -D OUTPUT -d <majority_nodes> -j DROP
+
+# Verify recovery
+mongo --eval "rs.status()" | grep "state: RECOVERING → SECONDARY"
+
+# Verify Target mode restored
+mongo --eval "db.test.insert({x: 1})"  # Should succeed
+```
+
+**7. SLOs for Each Mode**
+
+Operators can define SLOs that account for CAP:
+- **Target mode**: 99.9% of requests succeed, P99 latency <50ms
+- **Degraded-CP mode**: 0% availability expected (partition is external event)
+- **Recovery mode**: 100% success rate (eventually), recovery time <30s for 1M oplog entries
+- **Floor mode**: Manual intervention required, no SLO
+
+**8. Cost-Benefit Analysis**
+
+**Choosing CP** (MongoDB, Spanner):
+- **Benefit**: Never return stale data, strong consistency
+- **Cost**: Minority unavailability during partition (rare but happens)
+- **Use case**: Financial transactions, inventory management, where consistency > availability
+
+**Choosing AP** (Cassandra, DynamoDB):
+- **Benefit**: Always available, low latency
+- **Cost**: Eventual consistency, conflict resolution complexity
+- **Use case**: Shopping carts, session storage, social media feeds, where availability > consistency
+
+The mode matrix makes this trade-off explicit and operational, not just theoretical.
+
 ### The PACELC Extension (2012)
 
 CAP only describes behavior *during partitions*. But systems make trade-offs even when healthy.
@@ -416,6 +1010,594 @@ CDNs cache content at edges for low latency:
 - Target: Serve fresh content within TTL
 - Degraded: Serve stale content beyond TTL if origin unreachable
 - Floor: Return 503 (refuse to serve unverified stale content)
+
+---
+
+### Guarantee Vectors: Typing End-to-End Properties
+
+We've seen what's impossible. Now we need a precise way to describe what guarantees *are* possible, how they compose, and how they degrade when impossibilities manifest.
+
+Traditional approaches label systems with single adjectives: "strongly consistent," "eventually consistent," "highly available." These labels are too coarse. Consider: a globally replicated system might be strongly consistent for writes (via Paxos) but eventually consistent for reads (via local replicas), with bounded staleness of 100ms, and idempotent retry semantics for failures. How do we capture this?
+
+**Guarantee vectors** provide a typed, compositional framework for precisely specifying distributed system guarantees. Instead of one label, we use a 6-tuple that captures orthogonal dimensions of system behavior:
+
+```
+G = ⟨Scope, Order, Visibility, Recency, Idempotence, Auth⟩
+```
+
+Each component types a specific aspect of the guarantee. The vector notation makes composition explicit: when services chain, guarantees compose via well-defined operators. Most importantly, the **weakest component determines the end-to-end guarantee**—a principle that makes system analysis tractable.
+
+#### Why Vectors? The Composition Problem
+
+Consider a read request in a distributed database:
+
+```
+Client → Load Balancer → API Gateway → Database Leader → Storage Engine → Disk
+```
+
+Each hop provides guarantees:
+- Load balancer: Eventually routes to healthy node (eventual order)
+- API Gateway: Session consistency (causal order)
+- Database Leader: Linearizable writes (strict serializability)
+- Storage Engine: Snapshot isolation (serializable visibility)
+- Disk: Durable writes (persistent)
+
+What guarantee does the client get? **The meet (∧) of all components**: eventual order ∧ causal ∧ linearizable ∧ snapshot = **eventual consistency** (the weakest). A single eventually consistent component weakens the entire chain.
+
+Traditional labels hide this. Guarantee vectors make it explicit.
+
+#### The 6-Tuple Definition
+
+Let's define each component with precision:
+
+**1. Scope: Over What Space Does the Guarantee Hold?**
+
+```
+Scope ∈ {Object, Range, Transaction, Global}
+```
+
+- **Object**: Guarantee applies to a single object/key
+  - Example: Per-key linearizability (each key independently consistent)
+- **Range**: Guarantee applies to a contiguous keyspace range
+  - Example: Range locks, shard-local transactions
+- **Transaction**: Guarantee applies to all objects in a transaction
+  - Example: Snapshot isolation across transaction scope
+- **Global**: Guarantee applies to the entire system
+  - Example: Strict serializability across all keys
+
+**Why it matters**: Scope determines coordination cost. Object-scope is cheap (local). Global scope is expensive (all nodes must coordinate). Impossibility results constrain achievable scope—FLP limits global scope, CAP forces scope reduction during partitions.
+
+**2. Order: How Are Operations Sequenced?**
+
+```
+Order ∈ {None, Causal, Lx, SS}
+```
+
+- **None**: No ordering guarantee (operations may appear in any order)
+  - Example: Shopping cart with concurrent adds (resolve later)
+- **Causal**: Operations preserve causality (if A happened-before B, all observers see A before B)
+  - Example: Social media feed (replies appear after posts)
+- **Lx (Linearizable per-object)**: Each object has a total order respecting real-time
+  - Example: Redis INCR (atomic increments per key)
+- **SS (Strict Serializable)**: Global total order respecting real-time across all objects
+  - Example: Spanner transactions, SERIALIZABLE in PostgreSQL
+
+**Why it matters**: Order determines whether you can reason about "happened before." FLP impossibility constrains achievable order without synchrony assumptions. PACELC says stronger order costs latency.
+
+**3. Visibility: What Do Concurrent Transactions See?**
+
+```
+Visibility ∈ {Fractured, RA, SI, SER}
+```
+
+- **Fractured**: No consistency across reads (each read may see different version)
+  - Example: Stale cache hits during partition
+- **RA (Read Atomic)**: All reads in an operation see the same consistent snapshot
+  - Example: Eventual consistency with read-your-writes
+- **SI (Snapshot Isolation)**: Transactions read from a consistent snapshot, no write skew within transaction
+  - Example: MVCC databases at default isolation level
+- **SER (Serializable)**: Equivalent to some serial execution; prevents all anomalies
+  - Example: PostgreSQL SERIALIZABLE, Spanner
+
+**Why it matters**: Visibility determines what anomalies are possible (phantom reads, write skew, lost updates). CAP theorem directly constrains visibility during partitions—partition means fractured visibility unless you sacrifice availability.
+
+**4. Recency: How Fresh Is the Data?**
+
+```
+Recency ∈ {EO, BS(δ), Fresh(φ)}
+```
+
+- **EO (Eventual Order)**: Writes propagate eventually, no time bound
+  - Example: DNS propagation (minutes to hours)
+- **BS(δ) (Bounded Staleness)**: Reads are at most δ time units stale
+  - Example: Azure Cosmos DB with 5-second staleness bound
+- **Fresh(φ) (Fresh with proof φ)**: Reads are guaranteed fresh, with verifiable evidence φ
+  - Example: Linearizable read with quorum certificate or leader lease
+
+**Why it matters**: Recency captures the time dimension of consistency. PACELC's latency-consistency trade-off is explicitly in the recency component. Fresh(φ) requires evidence (quorum, lease), which FLP says needs failure detection.
+
+**5. Idempotence: Can Operations Be Safely Retried?**
+
+```
+Idempotence ∈ {None, Idem(K)}
+```
+
+- **None**: Operations are not idempotent; retries may cause duplicates
+  - Example: POST without idempotency key (double-charge risk)
+- **Idem(K)**: Operations idempotent with keying discipline K
+  - Example: PUT with conditional writes, POST with idempotency token
+
+**Why it matters**: Networks lose messages. Retries are inevitable. Without idempotence, you risk duplicate operations (double-charges, duplicate orders). Idem(K) makes retries safe, which is essential for circumventing FLP (retry until success) and CAP (retry after partition heals).
+
+**6. Auth: Who Can Generate Evidence?**
+
+```
+Auth ∈ {Unauth, Auth(π)}
+```
+
+- **Unauth**: No authentication; trust all claims
+  - Example: Internal service mesh (trusted network)
+- **Auth(π)**: Evidence requires authentication via mechanism π
+  - Example: JWT tokens, mTLS certificates, signatures
+
+**Why it matters**: Byzantine failures and security require authenticated evidence. Auth(π) enables verification without trust. In Byzantine consensus, Auth(π) reduces message complexity from O(n³) to O(n²) (lower bound).
+
+#### Composition Operators: How Guarantees Transform
+
+Guarantees don't exist in isolation—they compose through system boundaries. We define four composition operators:
+
+**1. Meet (∧): Sequential or Parallel Composition**
+
+When service A calls service B, or when merging results from parallel calls:
+
+```
+G_result = meet(G_A, G_B)
+```
+
+**Meet rule**: Component-wise minimum (weakest wins)
+
+Example:
+```
+G_A = ⟨Global, SS, SER, Fresh(φ), Idem(K), Auth⟩
+G_B = ⟨Range, Causal, RA, BS(100ms), Idem(K), Auth⟩
+
+G_result = ⟨Range, Causal, RA, BS(100ms), Idem(K), Auth⟩
+```
+
+Interpretation: B's weaker guarantees propagate to the result. The chain is only as strong as its weakest link.
+
+**Why**: Evidence cannot strengthen spontaneously. If B provides only range-scoped evidence, the result cannot be global. If B provides bounded-stale data, the result cannot be fresh.
+
+**2. Upgrade (↑): Inject Evidence to Strengthen**
+
+To strengthen guarantees, inject evidence-generating mechanism:
+
+```
+G_weak ↑ Evidence(φ) → G_strong
+```
+
+Example: Add consensus to eventual consistency
+```
+G_weak = ⟨Range, Causal, RA, EO, Idem(K), Auth⟩
+      ↑ PaxosConsensus(quorum_cert)
+→ G_strong = ⟨Global, Lx, SER, Fresh(quorum_cert), Idem(K), Auth⟩
+```
+
+**Upgrade is not free**: It requires coordination, which adds latency. This is PACELC's EL trade-off made explicit.
+
+Examples:
+- EO ↑ Fresh: Add leader lease + fencing tokens
+- Causal ↑ SS: Add consensus protocol (Paxos, Raft)
+- Unauth ↑ Auth: Add signature verification
+
+**3. Downgrade (⤓): Explicit Weakening**
+
+When evidence expires or is unavailable, explicitly weaken guarantees:
+
+```
+G_strong ⤓ reason → G_weak
+```
+
+Example: Partition detection
+```
+G_CP = ⟨Global, SS, SER, Fresh(φ), Idem(K), Auth⟩
+     ⤓ partition_minority
+→ G_degraded = ⟨Local, None, Fractured, EO, Idem(K), Auth⟩
+```
+
+**Downgrade must be explicit**: System must detect the condition (partition, timeout, lease expiry) and communicate the weakened guarantee to clients.
+
+Examples:
+- Fresh ⤓ BS: Lease expired, serve cached data with staleness bound
+- SS ⤓ Causal: Partition detected, majority unavailable
+- Auth ⤓ Unauth: Certificate expired, continue in degraded mode
+
+**4. Context Capsule: Carrying Guarantees Across Boundaries**
+
+When calling another service, send a **context capsule** that declares the guarantee:
+
+```
+ContextCapsule {
+  current_G: GuaranteeVector,
+  required_G: GuaranteeVector,
+  evidence: Evidence,
+  mode: Mode(Target | Degraded | Floor | Recovery),
+  epoch: Epoch,
+  staleness_bound: Option<Duration>
+}
+```
+
+The callee:
+1. Checks if it can meet `required_G`
+2. If yes: provides `required_G` (or stronger)
+3. If no: returns error or degraded result with actual `G`
+
+**Example**: API gateway calls database
+```
+Capsule sent:
+  required_G = ⟨Transaction, SS, SER, Fresh(φ), Idem(K), Auth⟩
+
+Database response:
+  actual_G = ⟨Transaction, SS, SER, BS(50ms), Idem(K), Auth⟩
+  reason = "Leader lease expired 50ms ago"
+  mode = Degraded
+```
+
+Gateway now knows it received stale data and can decide: accept it, retry, or return error to client.
+
+#### Worked Examples: Impossibilities Through Vectors
+
+Let's see how impossibility results manifest as constraints on achievable guarantee vectors.
+
+**Example 1: FLP Impossibility Transformation**
+
+**Start**: Pure asynchronous system (no failure detection)
+```
+G_async = ⟨Global, Causal, RA, EO, Idem(K), Auth⟩
+```
+- No termination guarantee (FLP)
+- Cannot upgrade to linearizable order
+
+**Add**: Eventually Perfect Failure Detector (◊P)
+```
+G_async ↑ ◊P(heartbeat, timeout) → G_FLP_circumvent
+G_FLP_circumvent = ⟨Global, Lx, SER, Fresh(lease), Idem(K), Auth⟩
+```
+- Now achieves linearizable order
+- Termination guaranteed after GST (Global Stabilization Time)
+
+**Evidence chain**:
+1. Heartbeat receipt → liveness evidence
+2. Timeout expiry → failure suspicion evidence
+3. Quorum of non-failed processes → majority evidence
+4. Leader lease based on majority → freshness evidence (φ = lease)
+
+**Key insight**: FLP says you can't get Fresh(φ) without detectable time bounds. Adding ◊P provides those bounds (eventual accuracy), enabling the upgrade.
+
+**Example 2: CAP Decision Tree with Vectors**
+
+**Initial state** (no partition):
+```
+G_initial = ⟨Global, SS, SER, Fresh(φ), Idem(K), Auth⟩
+```
+- Both consistency and availability achieved
+
+**Partition detected**: Network split into majority and minority
+
+**CP Choice** (prioritize consistency):
+
+Majority partition:
+```
+G_CP_majority = ⟨Global, SS, SER, Fresh(φ), Idem(K), Auth⟩
+```
+- Maintains all strong guarantees
+- Availability: Yes (has quorum)
+
+Minority partition:
+```
+G_CP_minority = ⟨Local, None, Fractured, EO, Idem(K), Auth⟩
+```
+- Scope reduced to Local (no quorum)
+- Order reduced to None (cannot commit)
+- Visibility fractured (no consistent reads)
+- Availability: No (fail closed)
+
+**AP Choice** (prioritize availability):
+
+Both partitions:
+```
+G_AP_both = ⟨Range, Causal, RA, BS(δ), Idem(K), Auth⟩
+```
+- Scope reduced to Range (per-partition)
+- Order weakened to Causal (vector clocks)
+- Recency weakened to Bounded Staleness
+- Visibility read-atomic (consistent within partition)
+- Availability: Yes (both partitions serve requests)
+
+**Evidence changes**:
+- CP: Requires Fresh(φ) = quorum certificate; minority lacks it → blocks
+- AP: Accepts BS(δ) = last-known version; both partitions have local evidence → continue
+
+**Key insight**: CAP is about which evidence you require. CP requires fresh quorum evidence (unavailable in minority). AP accepts bounded-stale local evidence (available in both).
+
+**Example 3: PACELC Latency-Consistency Trade-off**
+
+**Scenario**: Cross-region replication (3 datacenters: US-East, US-West, EU)
+
+**Choice 1: PC/EC** (Consistency always, even during normal operation)
+```
+G_PC_EC = ⟨Global, SS, SER, Fresh(φ_quorum), Idem(K), Auth⟩
+```
+- Every write: Synchronous replication to 2/3 replicas (quorum)
+- Latency: 150ms (cross-region RTT)
+- Partition: Minority unavailable (PC)
+- Evidence: Quorum certificate for every operation
+
+**Choice 2: PA/EL** (Low latency normally, availability during partition)
+```
+G_PA_EL = ⟨Range, Causal, RA, BS(200ms), Idem(K), Auth⟩
+```
+- Every write: Asynchronous replication
+- Latency: 5ms (local write)
+- Partition: All partitions continue (PA)
+- Evidence: Local version vector, replicate best-effort
+
+**Composition cost**:
+```
+PC/EC: Latency = 150ms, Availability = 99.9%
+PA/EL: Latency = 5ms, Availability = 99.99%
+
+For 3-hop service chain (A → B → C):
+PC/EC chain: 450ms total latency
+PA/EL chain: 15ms total latency
+```
+
+**Key insight**: PACELC's EL trade-off is explicit in the Recency component. Fresh(φ) requires coordination (latency cost). BS(δ) or EO avoid coordination (low latency).
+
+**Example 4: DynamoDB Request Path Composition**
+
+Let's trace a single GetItem request through DynamoDB's architecture with guarantee vector composition:
+
+**1. Client SDK → Load Balancer**
+```
+G_client = ⟨Object, Lx, SER, Fresh(φ), Idem(K), Auth(IAM)⟩
+```
+(Client desires strong consistency)
+
+**2. Load Balancer → Storage Node**
+```
+G_lb = ⟨Range, Causal, RA, BS(100ms), Idem(K), Auth(IAM)⟩
+```
+(Load balancer may route to stale replica)
+
+**Composition (meet)**:
+```
+G_result = meet(G_client, G_lb) = ⟨Object, Causal, RA, BS(100ms), Idem(K), Auth(IAM)⟩
+```
+
+**3. Strongly Consistent Read Request** (client specifies):
+```
+Request: GetItem(ConsistentRead=true)
+```
+
+This injects an upgrade operator:
+```
+G_lb ↑ QuorumRead(evidence=partition_lease) → G_strong
+G_strong = ⟨Object, Lx, SER, Fresh(partition_lease), Idem(K), Auth(IAM)⟩
+```
+
+**Evidence chain**:
+- Partition lease: Proves which node owns this key range
+- Quorum read: Reads from quorum of replicas (latest version)
+- Version number: Provides ordering evidence
+
+**Cost**: +10ms latency (quorum read vs. local read)
+
+**4. Partition Scenario**: During partition, quorum unreachable
+
+Storage node downgrades:
+```
+G_strong ⤓ partition_quorum_lost → G_degraded
+G_degraded = ⟨Object, None, Fractured, EO, Idem(K), Auth(IAM)⟩
+```
+
+Response to client:
+```
+Error: ServiceUnavailable
+Message: "Cannot satisfy ConsistentRead=true during partition"
+```
+
+Client can retry with ConsistentRead=false:
+```
+G_eventual = ⟨Object, Causal, RA, BS(δ_unknown), Idem(K), Auth(IAM)⟩
+```
+- Returns potentially stale data
+- But remains available (AP choice)
+
+**Vector transformation summary**:
+```
+Desired:     ⟨Object, Lx, SER, Fresh(φ), Idem(K), Auth⟩
+Available:   ⟨Range, Causal, RA, BS(100ms), Idem(K), Auth⟩
+Upgrade:     ↑ QuorumRead(lease)
+Achieved:    ⟨Object, Lx, SER, Fresh(lease), Idem(K), Auth⟩
+Degraded:    ⤓ partition_quorum_lost
+Final:       ⟨Object, None, Fractured, EO, Idem(K), Auth⟩
+```
+
+#### Visual Model: The Guarantee Lattice
+
+Guarantees form a lattice ordered by strength. Here's the partial order for the Order component:
+
+```
+         SS (Strict Serializable)
+          |
+         Lx (Linearizable per-object)
+          |
+       Causal
+          |
+        None
+
+Composition: meet(SS, Causal) = Causal (weaker)
+Upgrade:     Causal ↑ consensus → SS (requires evidence)
+Downgrade:   SS ⤓ partition → Causal (lose global order)
+```
+
+The same lattice structure applies to each component:
+
+**Scope lattice**: Global > Transaction > Range > Object
+**Visibility lattice**: SER > SI > RA > Fractured
+**Recency lattice**: Fresh(φ) > BS(δ) > EO
+
+**Composition rule**: Move down the lattice (to weaker guarantees) unless evidence moves you up.
+
+#### Key Insights: Why This Framework Matters
+
+**1. Weakest Component Determines End-to-End Guarantee**
+
+A system is only as strong as its weakest link. If any component in a chain provides Fractured visibility, the end-to-end guarantee is Fractured, no matter how strong other components are.
+
+**Implication**: Audit every boundary. One eventually consistent cache ruins linearizability.
+
+**2. Evidence Costs Are Explicit**
+
+Every upgrade requires evidence. Evidence requires coordination. Coordination has latency cost:
+- EO → BS(δ): Add version tracking, asynchronous replication
+- BS(δ) → Fresh(φ): Add quorum reads/writes, consensus protocol
+- None → Causal: Add vector clocks, causality tracking
+- Causal → SS: Add global consensus (Paxos, Raft)
+
+PACELC's trade-off is visible: stronger guarantees (higher in lattice) cost more latency.
+
+**3. Impossibilities Constrain Achievable Vectors**
+
+FLP: Cannot achieve `⟨Global, SS, SER, Fresh(φ), _, _⟩` in pure asynchronous system (no evidence generation without time bounds)
+
+CAP (during partition):
+- CP: Cannot achieve availability in minority
+- AP: Cannot achieve Fresh(φ) globally (evidence cannot propagate)
+
+PACELC: Fresh(φ) costs latency proportional to replication distance and coordination rounds
+
+**4. Composition Is Predictable**
+
+Given:
+```
+G_A = ⟨Scope_A, Order_A, Vis_A, Rec_A, Idem_A, Auth_A⟩
+G_B = ⟨Scope_B, Order_B, Vis_B, Rec_B, Idem_B, Auth_B⟩
+```
+
+Sequential composition (A → B):
+```
+G_result = ⟨min(Scope_A, Scope_B),
+            min(Order_A, Order_B),
+            min(Vis_A, Vis_B),
+            min(Rec_A, Rec_B),
+            min(Idem_A, Idem_B),
+            min(Auth_A, Auth_B)⟩
+```
+
+This makes reasoning tractable. You don't need to simulate execution—just compute the meet.
+
+**5. Degradation Is Explicit and Controlled**
+
+When impossibilities manifest (partition, timeout, lease expiry), systems must downgrade:
+
+```
+if partition_detected() && is_minority():
+    current_G ⤓ partition_minority
+    capsule.mode = Degraded
+    capsule.actual_G = ⟨Local, None, Fractured, EO, Idem, Auth⟩
+    return ServiceUnavailable(capsule)
+```
+
+Clients see the degraded guarantee explicitly and can decide how to proceed.
+
+#### Connection to Impossibility Results: The Complete Picture
+
+Let's tie this back to what we've learned:
+
+**FLP Impossibility**:
+```
+Asynchronous system:  ⟨_, _, _, EO, _, _⟩  (no time bounds)
+       ↑ ◊P (failure detector)
+Eventually synchronous: ⟨_, _, _, Fresh(φ), _, _⟩  (after GST)
+```
+
+FLP says: You cannot upgrade from EO to Fresh(φ) without assumptions. Failure detectors provide those assumptions.
+
+**CAP Theorem**:
+```
+No partition:  ⟨Global, SS, SER, Fresh(φ), _, _⟩
+Partition + CP: Majority: ⟨Global, SS, SER, Fresh(φ), _, _⟩
+                Minority: ⟨Local, None, Fractured, EO, _, _⟩
+Partition + AP: Both:     ⟨Range, Causal, RA, BS(δ), _, _⟩
+```
+
+CAP says: Cannot maintain Fresh(φ) globally during partition without sacrificing availability. Pick which component to weaken: Recency (AP) or Availability (CP).
+
+**PACELC**:
+```
+Fresh(φ):   Latency = high  (quorum coordination)
+BS(δ):      Latency = medium (async replication)
+EO:         Latency = low     (local-only)
+```
+
+PACELC says: Recency component directly trades against latency. Explicit in the vector.
+
+**Consensus Lower Bounds**:
+```
+SS requires:  f+1 rounds minimum
+Fresh(φ):     Quorum reads/writes (majority round-trips)
+Global:       O(n) messages minimum
+```
+
+Lower bounds determine the minimum cost of generating evidence for each component. The vector makes the cost structure explicit.
+
+---
+
+### Summary: Guarantees as Types
+
+Guarantee vectors transform distributed systems reasoning from art to science:
+
+**Before**: "This system is eventually consistent... mostly... except when it's strongly consistent... I think?"
+
+**After**: "This system provides `⟨Range, Causal, RA, BS(100ms), Idem(K), Auth⟩` in Target mode, degrading to `⟨Object, None, Fractured, EO, Idem(K), Auth⟩` during partitions, with explicit downgrade notification."
+
+The vector framework gives us:
+1. **Precision**: Each component is well-defined
+2. **Composability**: Meet operator for chaining services
+3. **Predictability**: Weakest component determines end-to-end guarantee
+4. **Observability**: Vectors can be exposed in APIs and monitoring
+5. **Operationality**: Explicit upgrade/downgrade operators
+
+Most importantly, guarantee vectors make **impossibility results operational**. They're not abstract theorems—they're constraints on achievable vectors. When you see a system's guarantee vector, you see exactly which impossibilities it respects and how it circumvents them.
+
+In the next section, we explore the formal evidence calculus that underlies these vectors—the precise rules for evidence generation, propagation, expiration, and verification that make guarantees verifiable rather than aspirational.
+
+---
+
+!!! key-takeaway "The Conservation Principle for Guarantees"
+    **Guarantees cannot strengthen without evidence.** When service A calls service B:
+
+    - If B provides weaker guarantees than A, the result is weak (evidence dilutes)
+    - If B provides stronger guarantees than A needs, the result matches A's request (evidence is sufficient)
+    - To strengthen guarantees mid-chain requires injecting evidence-generating mechanism (upgrade operator)
+
+    **Corollary**: Single-page systems are easier to reason about than distributed systems because there's no composition—one evidence domain, one guarantee vector. Distribution forces composition, and composition applies the meet operator, weakening guarantees at every boundary unless explicitly managed.
+
+---
+
+!!! example "Exercise: Analyze Your System's Guarantee Vector"
+    Pick a critical request path in your system (e.g., "user login" or "place order"):
+
+    1. **List all hops**: Client → Gateway → Auth Service → Database → ...
+    2. **Assign vectors**: What guarantee does each hop provide?
+    3. **Compute meet**: What's the end-to-end vector?
+    4. **Identify weakest link**: Which hop determines the overall guarantee?
+    5. **Spot upgrade opportunities**: Where could you inject evidence to strengthen?
+    6. **Design degradation**: What should each hop's vector become during partition/timeout?
+
+    If you can't answer these questions, your system's guarantees are implicit and fragile. Making them explicit via vectors is the first step to operationalizing impossibility results.
 
 ---
 

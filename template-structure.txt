@@ -1,0 +1,231 @@
+CHAPTER CRAFTING TEMPLATES - FILE STRUCTURE
+==============================================
+
+ChapterCraftingTemplates.md (3013 lines)
+├── Section 1: Guarantee Vector Template
+│   ├── 1.1 YAML Format Specification
+│   ├── 1.2 Field Descriptions
+│   ├── 1.3 Composition Operators
+│   └── 1.4 Best Practices
+│
+├── Section 2: Mode Matrix Generator
+│   ├── 2.1 YAML Input Format
+│   ├── 2.2 Python Generator Script
+│   ├── 2.3 Example Usage
+│   └── 2.4 Validation Checklist
+│
+├── Section 3: Evidence Card Template
+│   ├── 3.1 Template Structure (Complete Example: Closed Timestamp)
+│   ├── 3.2 Blank Template (Fill-in)
+│   └── 3.3 Validation Checklist
+│
+├── Section 4: Context Capsule Schema
+│   ├── 4.1 JSON Schema Definition
+│   ├── 4.2 Example Capsules (3 examples)
+│   ├── 4.3 Capsule Operations (Python implementations)
+│   ├── 4.4 Composition Rules
+│   └── 4.5 Validation Checklist
+│
+├── Section 5: Sacred Diagram ASCII Templates
+│   ├── 5.1 The Five Canonical Diagrams
+│   │   ├── Diagram 1: Invariant Guardian
+│   │   ├── Diagram 2: Evidence Flow
+│   │   ├── Diagram 3: Composition Ladder
+│   │   ├── Diagram 4: Mode Compass
+│   │   └── Diagram 5: Knowledge vs Data Flow
+│   ├── 5.2 Consistent Visual Grammar
+│   └── 5.3 Template Usage Guidelines
+│
+├── Section 6: Chapter Development Canvas
+│   ├── 6.1 Full Canvas Template (17 sections)
+│   │   ├── 1. Invariant Focus
+│   │   ├── 2. Uncertainty Addressed
+│   │   ├── 3. Evidence Generated
+│   │   ├── 4. Guarantee Vector
+│   │   ├── 5. Context Capsule
+│   │   ├── 6. Mode Matrix Snapshot
+│   │   ├── 7. Duality Choices
+│   │   ├── 8. Human Model
+│   │   ├── 9. Learning Spiral
+│   │   ├── 10. Transfer Tests
+│   │   ├── 11. Cross-Chapter Threads
+│   │   ├── 12. Sacred Diagrams
+│   │   ├── 13. Irreducible Sentence
+│   │   ├── 14. Cognitive Load Check
+│   │   ├── 15. Validation Checklist
+│   │   ├── 16. Anti-Patterns to Avoid
+│   │   └── 17. Notes and Open Questions
+│   └── 6.2 Example Filled Canvas (Follower Reads - complete)
+│
+├── Section 7: Supporting Tools
+│   ├── 7.1 Mental Linter (Python script)
+│   ├── 7.2 Guarantee Vector Validator (Python script)
+│   └── 7.3 Capsule Operation Examples
+│
+├── Section 8: Best Practices and Usage Guidelines
+│   ├── 8.1 Getting Started
+│   ├── 8.2 Common Workflows
+│   ├── 8.3 Validation Workflow
+│   └── 8.4 Tips for Consistency
+│
+├── Section 9: Quick Reference
+│   ├── Invariant Catalog (Brief)
+│   ├── Evidence Types (Brief)
+│   ├── Guarantee Vector Components
+│   └── Mode Transitions (Typical)
+│
+└── Section 10: Conclusion
+    ├── Key Principles
+    └── Success Metrics
+
+
+TEMPLATES_README.md (Quick Start Guide)
+├── Overview
+├── Files in This Repository
+├── What's Inside ChapterCraftingTemplates.md
+├── Quick Start: Three Workflows
+│   ├── Workflow 1: Writing a New Chapter
+│   ├── Workflow 2: Designing a New Mechanism
+│   └── Workflow 3: Analyzing Composition
+├── Template Navigation Guide
+├── Examples Included
+├── Tools and Scripts
+├── Visual Reference
+├── Validation Workflow
+├── Common Patterns
+├── Tips for Success
+└── Quick Reference Card
+
+
+EXAMPLE CONTENT INCLUDED
+=========================
+
+Complete Examples:
+1. Follower Reads with Closed Timestamps
+   - Full Guarantee Vector (Section 1.1)
+   - Complete Evidence Card (Section 3.1)
+   - Mode Matrix (Section 2.1)
+   - Context Capsules (Section 4.2)
+   - Filled Chapter Canvas (Section 6.2)
+
+2. All 5 Sacred Diagrams
+   - Template version (blank)
+   - Filled example (Follower Reads)
+   - Symbology guide
+
+3. Composition Examples
+   - Sequential (A ▷ B)
+   - Parallel (A || B → Merge)
+   - Upgrade (↑)
+   - Downgrade (⤓)
+
+
+TOOLS PROVIDED
+===============
+
+1. Mental Linter (Python)
+   - Checks invariant naming
+   - Validates evidence properties
+   - Ensures G vectors present
+   - Verifies mode matrix
+   - Detects anti-patterns
+
+2. Mode Matrix Generator (Python)
+   - YAML → Markdown conversion
+   - Automatic table formatting
+   - Compatibility checking
+
+3. Guarantee Vector Validator (Python)
+   - Meet semantics checker
+   - Composition validator
+   - Hierarchy enforcement
+
+4. Capsule Operations (Python)
+   - restrict()
+   - extend()
+   - rebind()
+   - renew()
+   - degrade()
+
+
+USAGE PATTERNS
+==============
+
+For Authors:
+1. Start with Chapter Canvas (Section 6.1)
+2. Fill invariant/uncertainty/evidence first
+3. Type paths with G vectors
+4. Define modes
+5. Choose diagrams
+6. Validate with linter
+
+For Reviewers:
+1. Check Canvas completion (Section 6.1, #15)
+2. Validate G vector composition
+3. Verify evidence properties
+4. Ensure mode consistency
+5. Run mental linter
+
+For Readers (of finished chapters):
+1. Identify invariants
+2. Trace evidence lifecycle
+3. Understand composition
+4. Predict degradation
+5. Apply to new domains
+
+
+KEY FILES BY USE CASE
+======================
+
+Planning a Chapter:
+→ Section 6.1 (Chapter Canvas)
+→ Section 8.2 (Common Workflows)
+
+Designing a Mechanism:
+→ Section 3.1 (Evidence Card)
+→ Section 1.1 (Guarantee Vector)
+→ Section 2.1 (Mode Matrix)
+
+Analyzing Composition:
+→ Section 4.1 (Context Capsule)
+→ Section 1.3 (Composition Operators)
+→ Section 5.1 Diagram 3 (Composition Ladder)
+
+Creating Diagrams:
+→ Section 5.1 (All 5 templates)
+→ Section 5.2 (Visual Grammar)
+
+Validating Work:
+→ Section 7.1 (Mental Linter)
+→ Section 6.1 #15 (Validation Checklist)
+→ Section 8.3 (Validation Workflow)
+
+
+CHEAT SHEET
+===========
+
+Guarantee Vector: ⟨Scope, Order, Visibility, Recency, Idempotence, Auth⟩
+Context Capsule: {invariant, evidence, boundary, mode, fallback}
+Evidence Properties: {scope, lifetime, binding, transitivity, revocation}
+Four Modes: Floor, Target, Degraded, Recovery
+Five Diagrams: Guardian, Flow, Ladder, Compass, Knowledge/Data
+
+Composition: meet(A, B) = weakest component wins
+Upgrade: Need new evidence
+Downgrade: Must be explicit and labeled
+Capsule Ops: restrict, extend, rebind, renew, degrade
+
+Invariants: Conservation, Uniqueness, Authenticity, Integrity, Order,
+            Exclusivity, Monotonicity, Freshness, Visibility,
+            Convergence, Idempotence, BoundedStaleness, Availability
+
+Evidence Types: CommitCert, LeaseEpoch, ClosedTimestamp, ReadIndex,
+                MerkleProof, VerkleProof, Signature, TEEAttestation
+
+
+DOCUMENT VERSIONS
+=================
+
+ChapterCraftingGuide.md: Framework 3.0
+ChapterCraftingTemplates.md: Templates 1.0 (2025-10-01)
+TEMPLATES_README.md: Quick Start 1.0 (2025-10-01)
