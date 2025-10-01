@@ -141,7 +141,7 @@ docker push myapp                 # Ship anywhere
 docker run myapp                  # Run everywhere
 
 # The Dockerfile - infrastructure as code
-FROM node:16
+FROM node:22
 COPY . /app
 RUN npm install
 CMD ["node", "server.js"]

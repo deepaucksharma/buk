@@ -205,7 +205,7 @@ def trigger_view_change(self):
 ## Modern Byzantine Consensus
 
 ### HotStuff: Linear Complexity
-HotStuff (2019) achieves O(n) complexity:
+HotStuff (2018, published in PODC 2019) achieves O(n) complexity:
 
 ```python
 class HotStuffNode:

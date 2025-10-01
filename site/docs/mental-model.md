@@ -109,6 +109,7 @@ G = ⟨Scope, Order, Visibility, Recency, Idempotence, Auth⟩
 - **Scope**: Object, Range, Transaction, or Global
 - **Order**: None, Causal, Linearizable, or Serializable
 - **Visibility**: Fractured, Atomic, Snapshot, or Serializable
+  - Note: "Fractured" is a custom term (not ANSI SQL standard) describing visibility incoherence during network partitions
 - **Recency**: Eventual, Bounded, or Fresh
 - **Idempotence**: None or Keyed
 - **Auth**: Unauthenticated or Authenticated

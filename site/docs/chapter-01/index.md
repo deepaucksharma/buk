@@ -1090,14 +1090,22 @@ Order ∈ {None, Causal, Lx, SS}
 Visibility ∈ {Fractured, RA, SI, SER}
 ```
 
+**Note**: "Fractured" is not a standard ANSI SQL isolation level. It's a term we introduce to describe the state during network partitions where different parts of the system have inconsistent views. It's weaker than even Read Uncommitted, representing complete visibility incoherence across the system.
+
+Standard ANSI SQL isolation levels (Read Uncommitted, Read Committed, Repeatable Read, Snapshot, Serializable) assume a connected system. "Fractured" describes what happens when that assumption breaks.
+
 - **Fractured**: No consistency across reads (each read may see different version)
-  - Example: Stale cache hits during partition
+  - Example: Network partition where each partition has independent state
+  - Weaker than Read Uncommitted (not just dirty reads, but incoherent state)
 - **RA (Read Atomic)**: All reads in an operation see the same consistent snapshot
   - Example: Eventual consistency with read-your-writes
-- **SI (Snapshot Isolation)**: Transactions read from a consistent snapshot, no write skew within transaction
-  - Example: MVCC databases at default isolation level
+  - Similar to Read Committed but with cross-node guarantees
+- **SI (Snapshot Isolation)**: Transactions read from a consistent snapshot
+  - Example: MVCC databases (PostgreSQL, MySQL default isolation)
+  - Prevents many anomalies but allows write skew
 - **SER (Serializable)**: Equivalent to some serial execution; prevents all anomalies
-  - Example: PostgreSQL SERIALIZABLE, Spanner
+  - Example: PostgreSQL SERIALIZABLE, Google Spanner
+  - Strongest isolation level
 
 **Why it matters**: Visibility determines what anomalies are possible (phantom reads, write skew, lost updates). CAP theorem directly constrains visibility during partitions—partition means fractured visibility unless you sacrifice availability.
 

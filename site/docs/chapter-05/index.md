@@ -327,7 +327,7 @@ Contrary to myth, mainframes didn't die. They still run:
 3. **Data replication**: Replicate mainframe data to modern databases (Kafka, CDC)
 4. **Lift and shift**: Run mainframe software on emulated hardware (cheaper)
 
-**Why not rewrite?**: Too risky. Business logic embedded in COBOL nobody fully understands. Rewrites fail 70% of the time (cost overruns, missed requirements, bugs).
+**Why not rewrite?**: Too risky. Business logic embedded in COBOL nobody fully understands. Large rewrites frequently fail due to cost overruns, missed requirements, and bugs (widely cited in industry, though exact failure rates vary by context and definition).
 
 ### Client-Server Architecture (1980s-1990s)
 
@@ -352,7 +352,7 @@ Contrary to myth, mainframes didn't die. They still run:
 **Data Model**:
 - **Centralized database**: Oracle, SQL Server, Sybase
 - **ACID transactions**: Full transactional guarantees (inherited from mainframes)
-- **Connection pooling**: Clients reuse database connections (limited resources)
+- **Connection management**: Each client typically opens dedicated connections (early systems often lacked proper pooling, leading to connection exhaustion problems)
 - **Locking**: Pessimistic locks for consistency (row locks, table locks)
 
 #### Evidence Patterns in Client-Server
@@ -443,7 +443,7 @@ Contrary to myth, mainframes didn't die. They still run:
 
 **Data Model**:
 - **Relational databases**: Still RDBMS (Oracle, SQL Server, MySQL, PostgreSQL)
-- **Connection pooling**: App servers maintain connection pools (reuse connections)
+- **Connection pooling**: App servers maintain connection pools to reuse connections efficiently (this became standard in three-tier, solving the connection exhaustion problems common in client-server)
 - **ORM (Object-Relational Mapping)**: Hibernate, Entity Framework (abstract SQL)
 
 #### Evidence Patterns in Three-Tier
@@ -1028,7 +1028,7 @@ Observe the oscillation:
 
 **Problem**: You have a monolith (or legacy architecture). Want to migrate to microservices.
 
-**Anti-pattern**: Big Bang Rewrite. Rewrite the entire system from scratch. 70% failure rate (cost overruns, missed requirements, scope creep).
+**Anti-pattern**: Big Bang Rewrite. Rewrite the entire system from scratch. High failure rate (cost overruns, missed requirements, scope creep). Note: While "70%" is commonly cited in industry, this figure lacks rigorous empirical backing and varies significantly by project size, domain, and how "failure" is defined.
 
 **Pattern**: Strangler Fig (named after strangler fig vines that gradually overtake trees).
 
@@ -1145,7 +1145,8 @@ If step 3 fails (shipping unavailable):
 
 **Evolution**:
 
-- **2009**: Streaming launches. Monolith can't scale (monolithic database bottleneck).
+- **2007**: Streaming launches (January 2007). Initially handled by monolith.
+- **2008-2009**: Monolith struggles to scale with streaming growth (monolithic database bottleneck).
 - **2010**: Begin AWS migration. Move from vertical scaling (bigger machines) to horizontal scaling (more machines).
 - **2011**: Adopt microservices. Start extracting services from monolith (user service, recommendation service, streaming service).
 - **2012**: Introduce Chaos Monkey (chaos engineering tool). Randomly kills instances to test resilience.
@@ -1185,7 +1186,7 @@ If step 3 fails (shipping unavailable):
 - Services-first architecture enabled AWS (internal services became products)
 - Independence enables scaling (teams don't coordinate, just call APIs)
 
-#### Uber: Microservices to "Macroservices" (2013-2020)
+#### Uber: Microservices Proliferation and Consolidation (2013-2022)
 
 **Starting point (2013)**: Monolithic Python application. Ride-sharing in one city (San Francisco).
 
@@ -1196,9 +1197,9 @@ If step 3 fails (shipping unavailable):
 - **2014**: Adopt microservices. Rapidly extract services from monolith.
 - **2015**: 50+ services. Growing fast (new cities = new services).
 - **2016**: 500+ services. Complexity explosion. Debugging is nightmare.
-- **2018**: 2000+ services. Performance degradation (some requests touch 50+ services, latency adds up). Operational overhead crushing.
+- **2018**: 2200+ services (peak). Performance degradation (some requests touch 50+ services, latency adds up). Operational overhead crushing.
 - **2019**: Realization: "We over-fragmented." Some services are too small (nano-services). Tight coupling (many services call each other synchronously).
-- **2020**: Consolidation to ~100 "macroservices" (larger, domain-oriented services). Reduce cross-service calls. Improve performance (latency down 30%).
+- **2020-2022**: Consolidation to approximately 1000 domain-oriented services (down from 2200+). Reduce cross-service calls. Improve performance (latency down 30%).
 
 **Evidence infrastructure**:
 - **Distributed tracing**: Jaeger (Uber created, donated to CNCF)

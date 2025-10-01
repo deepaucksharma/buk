@@ -64,21 +64,21 @@ This book synthesizes:
 
 ## Structure and Approach
 
-The book follows a careful progression:
+The book follows a careful progression through 21 chapters:
 
-**Part I: Foundations** establishes the core principles—impossibility results, time, consensus, and replication.
+**Chapters 1-4: Foundations** establish the core principles—impossibility results, time and causality, consensus protocols, and replication strategies that define the field.
 
-**Part II: Evolution** traces how distributed systems evolved from mainframes to cloud-native.
+**Chapters 5-7: Evolution** trace how distributed systems evolved from mainframes to microservices, the storage revolution, and cloud-native transformation.
 
-**Part III: Modern Systems** covers contemporary patterns and architectures.
+**Chapters 8-10: Modern Systems** cover contemporary architectures, coordination at scale, and state management.
 
-**Part IV: Planet Scale** examines how tech giants build global systems.
+**Chapters 11-13: Planet Scale** examine how tech giants build systems that never sleep, plus the economics and security of distributed systems.
 
-**Part V: Practice** focuses on building, operating, and debugging.
+**Chapters 14-16: Practice** focus on building, operating, and debugging distributed systems in production.
 
-**Part VI: Advanced Topics** explores cutting-edge developments.
+**Chapters 17-19: Advanced Topics** explore CRDTs, end-to-end arguments, and systems thinking.
 
-**Part VII: Future** looks at emerging technologies and philosophical implications.
+**Chapters 20-21: Future** look at cutting-edge developments and the philosophical implications of distributed systems.
 
 ## Learning Path
 
@@ -132,7 +132,6 @@ Distributed systems evolve rapidly, but principles endure. This book gives you:
 Found an error? Have a suggestion? Want to share your experience?
 
 - GitHub: [Book Repository](https://github.com/deepaucksharma/buk)
-- Email: [Contact Author](mailto:contact@example.com)
 
 ## Final Thought
 

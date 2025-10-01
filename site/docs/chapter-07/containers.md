@@ -253,11 +253,11 @@ tail -f /var/log/apache2/error.log
 
 # Check PHP version
 php --version
-# PHP 5.4.16 (Wait, production is on 5.4? My laptop has 7.2!)
+# PHP 5.4.16 (Wait, production is on 5.4? My laptop has 8.2!)
 
-# Try to install PHP 7.2
-sudo apt-get install php7.2
-# Unable to locate package php7.2
+# Try to install PHP 8.2
+sudo apt-get install php8.2
+# Unable to locate package php8.2
 
 # Add repository
 sudo add-apt-repository ppa:ondrej/php
@@ -601,7 +601,7 @@ The Dockerfile is Docker's secret weapon. It's a **declarative recipe** for buil
 
 ```dockerfile
 # Multi-stage build example
-FROM golang:1.19 AS builder
+FROM golang:1.22 AS builder
 WORKDIR /app
 
 # Copy dependency files first (better caching)
@@ -626,7 +626,7 @@ CMD ["./main"]
 ```
 
 This Dockerfile:
-1. Uses Go 1.19 to build the application (builder stage)
+1. Uses Go 1.22 (current stable) to build the application (builder stage)
 2. Compiles a static binary
 3. Creates a tiny Alpine Linux image (final stage)
 4. Copies only the binary (not the entire Go toolchain)
@@ -1242,7 +1242,7 @@ Init containers run **sequentially** and must succeed before the main container 
 
 **Bad: 850MB**
 ```dockerfile
-FROM node:14
+FROM node:22
 WORKDIR /app
 COPY . .
 RUN npm install
@@ -1251,12 +1251,12 @@ CMD ["npm", "start"]
 
 **Good: 95MB**
 ```dockerfile
-FROM node:14-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 
-FROM node:14-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY --from=builder /app/node_modules ./node_modules
 COPY . .
@@ -1266,7 +1266,7 @@ CMD ["node", "index.js"]
 
 **Better: 50MB with Distroless**
 ```dockerfile
-FROM node:14-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production

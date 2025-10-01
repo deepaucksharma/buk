@@ -515,7 +515,7 @@ Despite theoretical elegance, Paxos has practical challenges:
 
 ### Raft: Consensus for the Real World
 
-Raft was designed in 2013 by Diego Ongaro and John Ousterhout with one goal: **be easier to understand and implement than Paxos**.
+Raft was published in 2014 by Diego Ongaro and John Ousterhout (based on work from 2013) with one goal: **be easier to understand and implement than Paxos**.
 
 **Design principles**:
 1. **Decomposition**: Separate leader election, log replication, and safety
@@ -778,7 +778,7 @@ PBFT (1999, Castro & Liskov) was the first practical Byzantine consensus protoco
 
 PBFT has **O(n²) message complexity** (all-to-all communication). Recent protocols improve this.
 
-**HotStuff (2019, VMware Research)**:
+**HotStuff (2018, VMware Research; PODC 2019)**:
 - **Linear message complexity**: O(n) messages per consensus (leader broadcasts, replicas respond to leader)
 - **Pipelined**: Multiple instances in flight (higher throughput)
 - **Responsive**: Commit latency depends on actual network delay, not worst-case timeout

@@ -58,26 +58,28 @@ Real incidents, real numbers, real lessons:
 
 ## Book Structure
 
-### Part I: Foundations
+The book is organized into 21 comprehensive chapters:
+
+### Chapters 1-4: Foundations
 The impossibility results, time and causality, consensus protocols, and replication strategies that define the field.
 
-### Part II: Evolution
+### Chapters 5-7: Evolution
 How distributed systems evolved from mainframes to microservices, the storage revolution, and cloud-native transformation.
 
-### Part III: Modern Systems
-Contemporary architectures, coordination at scale, and state management in 2025.
+### Chapters 8-10: Modern Systems
+Contemporary architectures, coordination at scale, and state management.
 
-### Part IV: Planet Scale
+### Chapters 11-13: Planet Scale
 How Google, Amazon, Meta, and Microsoft build systems that never sleep, plus economics and security.
 
-### Part V: Practice
+### Chapters 14-16: Practice
 Building, operating, and debugging distributed systems in production.
 
-### Part VI: Advanced Topics
+### Chapters 17-19: Advanced Topics
 CRDTs, end-to-end arguments, and systems thinking.
 
-### Part VII: Future
-Quantum networks, blockchain evolution, AI/ML integration, and philosophical implications.
+### Chapters 20-21: Future
+Cutting-edge developments and the philosophical implications of distributed systems.
 
 ## How to Use This Book
 

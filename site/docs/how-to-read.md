@@ -29,8 +29,10 @@ This book supports multiple reading paths depending on your goals and background
 4. Focus on case studies and exercises
 5. Reference theory as needed
 6. Read Chapter 15-16 (Operations & Debugging)
+7. Read Chapter 17 (CRDTs) for conflict resolution patterns
+8. Read Chapter 18 (End-to-End Arguments) for system design principles
 
-**Time Investment**: 15-20 hours
+**Time Investment**: 18-25 hours
 **Outcome**: Practical skills and patterns
 
 ### Path 3: The Operator Path (SREs/DevOps)
@@ -54,23 +56,57 @@ This book supports multiple reading paths depending on your goals and background
 3. Study evidence patterns deeply
 4. Compare different approaches
 5. Read Chapter 11 (Planet Scale Systems)
-6. Analyze the case studies
+6. Read Chapter 17 (CRDTs) for distributed data structures
+7. Read Chapter 18 (End-to-End Arguments) for architectural principles
+8. Read Chapter 19 (Complexity and Emergence) for systems thinking
+9. Read Chapter 20 (The Cutting Edge) for emerging patterns
+10. Analyze all case studies
 
-**Time Investment**: 30-40 hours
+**Time Investment**: 40-50 hours
 **Outcome**: Architectural wisdom
 
 ### Path 5: The Scholar Path (Students/Researchers)
 **For deep, comprehensive understanding**
 
-1. Read everything in order
+1. Read all 21 chapters in order
 2. Work all exercises
 3. Implement the systems
 4. Read the referenced papers
 5. Prove the theorems
-6. Contribute to the field
+6. Study advanced topics (Chapters 17-21) in depth
+7. Contribute to the field
 
 **Time Investment**: 100+ hours
 **Outcome**: Research-level understanding
+
+## Advanced Topics (Chapters 17-21)
+
+These chapters cover cutting-edge concepts and philosophical foundations:
+
+**Chapter 17: CRDTs (Conflict-free Replicated Data Types)**
+- Recommended for: Architects, Researchers
+- Prerequisite: Chapters 3-4 (Consensus, Replication)
+- Key concepts: Strong eventual consistency, commutative operations
+
+**Chapter 18: End-to-End Arguments in System Design**
+- Recommended for: All paths
+- Prerequisite: Understanding of layered architectures
+- Key concepts: Where to place functionality, system boundaries
+
+**Chapter 19: Systems as Systems (Complexity and Emergence)**
+- Recommended for: Architects, Senior Engineers
+- Prerequisite: Operational experience helpful
+- Key concepts: Emergent behavior, feedback loops, resilience
+
+**Chapter 20: The Cutting Edge**
+- Recommended for: All interested readers
+- Prerequisite: Solid foundations (Chapters 1-4)
+- Key concepts: Quantum networks, AI/ML integration, future directions
+
+**Chapter 21: Philosophy of Distributed Systems**
+- Recommended for: All paths
+- Prerequisite: None (can be read anytime)
+- Key concepts: Epistemology, trust, evidence, meaning of "distributed"
 
 ## How to Read Each Chapter
 

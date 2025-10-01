@@ -352,18 +352,20 @@ A service mesh provides infrastructure for service-to-service communication. It 
 
 #### Control Plane Patterns
 
-**Istio Architecture**:
+**Istio Architecture** (Istio 1.5+):
 ```
 Control Plane:
-  ├─ Istiod (unified control plane)
-  │   ├─ Pilot: Service discovery, traffic management
-  │   ├─ Citadel: Certificate management (CA)
-  │   └─ Galley: Configuration validation
+  ├─ Istiod (unified control plane, consolidates Pilot/Citadel/Galley)
+  │   ├─ Service discovery and traffic management
+  │   ├─ Certificate authority (CA) and certificate management
+  │   └─ Configuration validation and distribution
   └─ API Server: Kubernetes integration
 
 Data Plane:
   └─ Envoy sidecars (one per pod)
 ```
+
+**Note**: Prior to Istio 1.5 (March 2020), Pilot, Citadel, and Galley were separate components. The unified Istiod architecture simplifies deployment and reduces resource overhead.
 
 **Configuration**:
 - **VirtualService**: Routing rules (canary, A/B testing)
@@ -588,7 +590,7 @@ Both client and server authenticate:
 **Certificate Rotation**:
 
 Certificates expire quickly (1 hour to 1 day). Automatic rotation:
-1. Service requests new cert from Citadel/SPIRE
+1. Service requests new cert from CA (Istiod in Istio, SPIRE in standalone deployments)
 2. Presents short-lived proof (e.g., Kubernetes service account token)
 3. Receives new X.509 cert
 4. Starts using new cert
@@ -633,8 +635,12 @@ Service meshes handle synchronous request/response. Event-driven architecture ha
 ```
 Producers → Broker Cluster (Topics/Partitions) → Consumers
                 ↓
-            ZooKeeper (Metadata, coordination)
+            Consensus Layer:
+            • ZooKeeper (legacy, Kafka <3.3)
+            • KRaft (modern, Kafka 3.3+, production-ready since 3.5)
 ```
+
+**Note**: Kafka originally depended on ZooKeeper for metadata management and leader election. Since Kafka 2.8 (2021), KRaft (Kafka Raft) mode is available, eliminating the ZooKeeper dependency. Kafka 3.3+ defaults to KRaft, and it became production-ready in Kafka 3.5 (2023). ZooKeeper support is deprecated and will be removed in Kafka 4.0.
 
 **Core concepts**:
 - **Topic**: Logical channel (e.g., "user-events")
@@ -864,6 +870,14 @@ Event: OrderPlaced
 - Violates service autonomy
 
 **Saga solution**: Long-lived transaction as sequence of local transactions with compensating actions.
+
+**⚠️ CRITICAL WARNING**: Sagas provide **eventual consistency**, NOT ACID guarantees. During compensation, the system may be in inconsistent intermediate states visible to other operations. Unlike database transactions:
+- **No Isolation**: Other operations can see partial saga state
+- **No Atomicity**: Saga steps commit individually, not as a unit
+- **Compensations aren't rollbacks**: They're forward-moving actions that undo effects (e.g., refund vs. uncommit)
+- **Semantic locks**: Must use application-level techniques to prevent concurrent modification
+
+Use sagas when you need cross-service coordination and can tolerate temporary inconsistency. Use distributed transactions (2PC) when you need true ACID (accepting the availability cost).
 
 **Example: E-commerce order**
 
