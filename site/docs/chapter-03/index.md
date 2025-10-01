@@ -65,7 +65,7 @@ Every practical consensus protocol makes trade-offs:
 - Followers thought leader crashed, started election
 - Election took 47 seconds (protocol churn, split votes)
 - During those 47 seconds: no writes accepted, 100% write unavailability
-- Cost: $2.3M in lost transactions for one customer
+- Impact: Significant transaction loss during peak business hours
 - **This is FLP in production**: Cannot guarantee bounded-time consensus without synchrony assumptions
 
 **etcd split-brain (2015)**:

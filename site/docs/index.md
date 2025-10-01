@@ -51,10 +51,10 @@ Each chapter follows a three-pass spiral:
 ### 4. Production Focus
 
 Real incidents, real numbers, real lessons:
-- MongoDB's $2.3M election storm
-- GitHub's 24-hour CAP recovery
-- Google Spanner's atomic clock investment
-- Amazon DynamoDB's availability choices
+- MongoDB's election storm: calculating the cost of consensus delays
+- GitHub's 24-hour network partition incident (October 2018)
+- Google Spanner's TrueTime infrastructure investment
+- Amazon DynamoDB's availability-consistency trade-offs
 
 ## Book Structure
 

@@ -14,10 +14,12 @@ These are not hypothetical scenarios—these are documented incidents from major
 
 **Incident Date**: March 15, 2019
 **Duration**: 47 seconds of primary unavailability
-**Customer Impact**: $2.3M in lost transactions
+**Customer Impact**: Significant transaction loss during high-volume sales period
 **Root Cause**: FLP impossibility manifesting in production
 **Systems Affected**: MongoDB 3.6.x replica set cluster
 **Impossibility Result**: FLP impossibility (Fischer-Lynch-Paterson)
+
+**Note**: Financial impact estimates in this case study are based on typical e-commerce transaction rates (5,000 ops/sec) and industry-standard conversion values. Actual impact varies by business context.
 
 ### Background: MongoDB Replica Set Architecture
 
@@ -707,9 +709,10 @@ Latency costs:
   - Total: 7ms added latency
   - Revenue impact: 10% conversion drop = $500,000/month
 
-Availability costs:
-  - Unavailability: 47 seconds = $2.3M one-time
-  - Ongoing: ~5 seconds/month = ~$25,000/month expected
+Availability costs (example calculation for high-volume e-commerce):
+  - Unavailability: 47 seconds × 5,000 transactions/sec × $100 avg value × 10% conversion = ~$2.35M potential impact
+  - Ongoing: ~5 seconds/month expected = proportional monthly risk
+  - Note: Actual impact depends on time-of-day, sale events, customer behavior, and retry patterns
 ```
 
 **Action items**:
@@ -851,7 +854,9 @@ Key insight: **You cannot eliminate impossibility results, but you can design sy
 **Root Cause**: MySQL cluster network partition forcing CAP choice
 **Systems Affected**: GitHub's primary MySQL cluster (GitHub-MySQL)
 **Impossibility Result**: CAP Theorem (Brewer's Conjecture, Gilbert & Lynch proof)
-**Total Cost**: Estimated $2-3M in lost revenue, immeasurable reputation impact
+**Total Cost**: Significant revenue impact during peak development hours, substantial reputation damage
+
+**Source**: [GitHub Post-Incident Analysis - October 21-22, 2018](https://github.blog/2018-10-30-oct21-post-incident-analysis/)
 
 ### Background: GitHub's Database Architecture (Pre-incident)
 
@@ -2654,7 +2659,7 @@ Symptoms:
 - Deduplicate cart items automatically
 - Increase replication capacity
 
-**Cost**: $2.3M lost revenue (15% checkout failure during high-volume sale)
+**Cost**: Significant revenue loss from 15% checkout failure rate during peak sales event
 
 **Lesson**: Even eventual consistency has limits under extreme load
 

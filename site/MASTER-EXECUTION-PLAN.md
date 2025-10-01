@@ -302,7 +302,7 @@ site/
 - Opening: "Why your distributed database hung for 47 seconds"
 - The mathematical inevitability of uncertainty
 - How every consensus protocol is a negotiation with FLP
-- The $2.3M MongoDB incident decoded
+- MongoDB election storm incident: calculating the true cost of unavailability
 
 **Key Insights to Develop**:
 1. "Impossibility results are design freedoms in disguise"

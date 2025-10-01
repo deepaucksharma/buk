@@ -1,10 +1,12 @@
 # Production Lessons: What We Learned the Hard Way
 
-## The $2.3M MongoDB Incident
+## The MongoDB Ransomware Incident (2017)
 
 > "We lost 40% of our user data. The backups were corrupted. The replicas had the same corruption. This is our post-mortem."
 
-In 2017, a major SaaS company lost customer data worth $2.3M in revenue. The root cause? They ran MongoDB with default settings: **no authentication, no replication, listening on public IP**. Hackers deleted their data and left a ransom note. But this wasn't really about security—it was about not understanding the storage system they chose.
+In 2017, a SaaS company suffered a catastrophic data loss incident costing millions in customer value. The root cause? They ran MongoDB with default settings: **no authentication, no replication, listening on public IP**. Hackers deleted their data and left a ransom note. But this wasn't really about security—it was about not understanding the storage system they chose.
+
+**Note**: This incident represents a well-documented pattern from 2017 when thousands of MongoDB instances were compromised in similar ransomware attacks, resulting from using default configurations in production.
 
 ## Lesson 1: Defaults Are Rarely Production-Ready
 

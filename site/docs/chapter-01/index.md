@@ -90,7 +90,7 @@ Real-world consequences:
 
 **Google Spanner**: Chose consistency over availability. During partitions, minority partitions refuse writes. Minority regions become read-only or unavailable. Cost: planned unavailability during datacenter failures.
 
-**MongoDB primary election stalls**: In 2019, network flakiness caused leader election to take 47 seconds (should be <10s). During that time, no writes accepted. Cost: $2.3M in lost transactions for one customer. This is FLP impossibility in production—you cannot guarantee bounded-time consensus without synchrony assumptions.
+**MongoDB primary election stalls**: In 2019, network flakiness caused leader election to take 47 seconds (should be <10s). During that time, no writes accepted. For high-volume e-commerce systems, this translates to millions in potential lost revenue. This is FLP impossibility in production—you cannot guarantee bounded-time consensus without synchrony assumptions.
 
 The impossibilities aren't theoretical problems that clever engineers can "solve." They're constraints that shape every design.
 
